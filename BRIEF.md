@@ -243,8 +243,40 @@ Script de verificación con `httpx` sobre https://tgp-leads.onrender.com:
 [FALLA] worker procesó Mercado Libre -> error: marcador sin reemplazar: [Tu Empresa]
 ```
 
-Esa falla es la que se describe en la sección 2. **Pendiente:** volver a correr esta prueba
-cuando el fix esté desplegado y anotar aquí el resultado.
+Esa falla es la que se describe en la sección 2.
+
+**Después de desplegar el fix (PR #3)**, la misma prueba contra la URL pública:
+
+```
+[OK] POST Mercado Libre -> 202 pendiente dominio='mercadolibre.com'
+[OK] POST Rappi -> 202 pendiente dominio='rappi.com'
+[OK] los 4 POST inválidos -> 422, no se guardaron
+[OK] GET limit=1 / GET limit=101 -> 422
+[OK] worker procesó Mercado Libre -> procesado en <= 2s, intentos=1, 72 palabras
+[OK] worker procesó Rappi -> procesado en <= 2s, intentos=1, 70 palabras
+TODO OK
+```
+
+Para comprobar que Render corría la versión nueva y no la anterior, revisé la firma, que solo
+agrega el código nuevo: los dos correos terminan en `"\n\nSaludos,\nLaura Méndez\nNexo Analytics"`.
+
+Después mandé 8 leads más de una vez (Despegar, Globant, Clínica Alemana,
+Grupo Bimbo S.A. de C.V., Falabella, Nubank, Cemex, Kavak):
+
+```
+Terminados en 10s: {'procesado': 8}
+  procesado  intentos=1  69 palabras  firma=True  Despegar: Datos de producto en Despegar
+  procesado  intentos=1  70 palabras  firma=True  Globant: Datos en tiempo real para tu equipo técnico
+  procesado  intentos=1  64 palabras  firma=True  Clínica Alemana: Optimización de compras en Clínica Alemana
+  procesado  intentos=1  82 palabras  firma=True  Grupo Bimbo S.A. de C.V.: Optimización de datos en Grupo Bimbo
+  procesado  intentos=1  64 palabras  firma=True  Falabella: Conecta datos de marketing y ventas en Falabella
+  procesado  intentos=1  75 palabras  firma=True  Nubank: Conectar datos sin depender de TI
+  procesado  intentos=1  59 palabras  firma=True  Cemex: Optimización operativa en Cemex
+  procesado  intentos=1  60 palabras  firma=True  Kavak: Datos de ventas en tiempo real para Kavak
+```
+
+En la base de Render quedan 11 leads `procesado` y 1 en `error`: el de Mercado Libre de la
+primera prueba, anterior al fix.
 
 Equivalente con curl:
 
