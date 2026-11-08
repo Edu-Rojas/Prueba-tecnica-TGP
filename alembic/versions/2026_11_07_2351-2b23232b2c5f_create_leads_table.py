@@ -24,13 +24,13 @@ def upgrade() -> None:
     op.create_table(
         "leads",
         sa.Column("id", sa.Uuid(), nullable=False),
-        sa.Column("nombre_empresa", sa.String(length=200), nullable=False),
-        sa.Column("dominio", sa.String(length=253), nullable=False),
-        sa.Column("cargo_contacto", sa.String(length=200), nullable=False),
+        sa.Column("nombre_empresa", sa.String(length=255), nullable=False),
+        sa.Column("dominio", sa.String(length=255), nullable=False),
+        sa.Column("cargo_contacto", sa.String(length=255), nullable=False),
         sa.Column("estado", estado_lead, server_default="pendiente", nullable=False),
         sa.Column("correo_asunto", sa.String(length=300), nullable=True),
         sa.Column("correo_cuerpo", sa.Text(), nullable=True),
-        sa.Column("error_motivo", sa.Text(), nullable=True),
+        sa.Column("error_motivo", sa.String(length=255), nullable=True),
         sa.Column("intentos", sa.Integer(), server_default="0", nullable=False),
         sa.Column(
             "created_at",

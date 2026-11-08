@@ -9,7 +9,7 @@ class Settings(BaseSettings):
     # Las variables de entorno reales tienen prioridad sobre el .env.
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    database_url: str = "postgresql+psycopg://leads:leads@localhost:5432/leads"
+    database_url: str = "postgresql+asyncpg://leads:leads@localhost:5432/leads"
 
     # SecretStr evita que la key aparezca si alguien imprime o loguea la config.
     # Vacía por defecto: la API no la necesita, solo el worker la valida al arrancar.
