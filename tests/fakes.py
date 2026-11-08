@@ -1,6 +1,11 @@
 from app.llm.base import CorreoGenerado, DatosLead
 
-CORREO_OK = CorreoGenerado(asunto="Hola Acme", cuerpo="Un correo breve y personalizado.")
+# Pasa todas las validaciones: menciona al lead (Acme) y a la empresa remitente de los tests.
+EMPRESA_REMITENTE = "Nexo Analytics"
+CORREO_OK = CorreoGenerado(
+    asunto="Datos de ventas para Acme",
+    cuerpo=f"Hola, en {EMPRESA_REMITENTE} ayudamos a equipos como el de Acme. ¿Hablamos?",
+)
 
 
 class FakeLLM:

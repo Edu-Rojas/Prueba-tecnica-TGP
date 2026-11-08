@@ -77,8 +77,14 @@ async def sesiones():
 
 @pytest.fixture
 def settings() -> Settings:
-    # Sin esperas entre reintentos para que los tests sean rápidos.
-    return Settings(llm_backoff_seconds=0, groq_api_key="clave-de-test")
+    # Sin esperas entre reintentos para que los tests sean rápidos. Remitente fijo (no depende
+    # del .env) para que los correos de los tests sepan qué empresa deben mencionar.
+    return Settings(
+        llm_backoff_seconds=0,
+        groq_api_key="clave-de-test",
+        remitente_nombre="Laura Méndez",
+        remitente_empresa="Nexo Analytics",
+    )
 
 
 @pytest.fixture
