@@ -1,0 +1,27 @@
+# Blueprint de Render: crea la API (Docker, plan free) y su Postgres (plan free).
+# En Render: New > Blueprint > elegir este repo. GROQ_API_KEY se pide en el panel (sync: false),
+# nunca se escribe aquí.
+services:
+  - type: web
+    name: tgp-leads
+    runtime: docker
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: tgp-leads-db
+          property: connectionString
+      # El plan free no incluye Background Workers: el worker corre dentro de la API.
+      - key: RUN_WORKER_IN_API
+        value: "true"
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GROQ_MODEL
+        value: qwen/qwen3.8-27b
+
+databases:
+  - name: tgp-leads-db
+    plan: free
+    databaseName: leads
+    user: leads

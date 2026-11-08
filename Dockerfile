@@ -28,4 +28,6 @@ EXPOSE 8000
 # La api aplica las migraciones antes de arrancar (el worker sobreescribe este comando y no migra,
 # así nunca hay dos procesos migrando a la vez).
 # Forma "sh -c" para poder expandir ${PORT}: Render inyecta el puerto en esa variable.
-CMD ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
+# "exec" reemplaza al shell por uvicorn, que pasa a ser el PID 1 y recibe el SIGTERM de
+# `docker stop` / Render; sin exec, sh no lo reenvía y el contenedor muere a los 10 s por SIGKILL.
+CMD ["sh", "-c", "alembic upgrade head && exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]

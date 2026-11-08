@@ -1,6 +1,6 @@
 from functools import lru_cache
 
-from pydantic import SecretStr
+from pydantic import SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -30,6 +30,16 @@ class Settings(BaseSettings):
     run_worker_in_api: bool = False
 
     log_level: str = "INFO"
+
+    @field_validator("database_url")
+    @classmethod
+    def usar_driver_asyncpg(cls, url: str) -> str:
+        # Render (y casi todos los proveedores) entregan "postgres://..." o "postgresql://...".
+        # SQLAlchemy necesita que se indique el driver async: "postgresql+asyncpg://...".
+        for prefijo in ("postgres://", "postgresql://"):
+            if url.startswith(prefijo):
+                return "postgresql+asyncpg://" + url.removeprefix(prefijo)
+        return url
 
 
 @lru_cache
