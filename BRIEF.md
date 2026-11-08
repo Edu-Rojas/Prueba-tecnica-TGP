@@ -7,15 +7,20 @@ dirigí, dónde se equivocó y cómo comprobé que funciona.
 
 ### Cómo partí el problema
 
-Antes de pedir código busque la informacion necesaria para cumplir la tarea con esa informacion genere un prompt con lo que iba a utilizar. para esto defini ciertas cosas:
+Antes de pedir código busqué la información necesaria para cumplir la tarea, y con esa información
+generé un prompt con lo que iba a utilizar. Para eso definí ciertas cosas:
 
 1. **Contexto y requisitos:** qué hace el servicio (`POST /leads` con 202 sin llamar al LLM, un
    worker que genera el correo, `GET /leads`), qué se evalúa (que funcione de punta a punta, el
    manejo de fallas del LLM, tests de los cambios de estado, CI, commits chicos, cero secretos) y
-   qué queda fuera, realice un plan detallado de lo que iba a necesitar de antemano por lo que termine de definir detalles y luego tenia que correr todo el plan y verificar que lo que estaba planeado estuviera bien echo.
-2. **Decisiones ya tomadas**, para que el agente no las reinventara: Python 3.12, FastAPI,
-   SQLAlchemy 2.0 + Alembic, uv, tests contra Postgres real con el LLM mockeado, Groq detrás de
-   un protocolo `LLMClient`. Le defini exactamente que era lo que esperaba, que era el proyecto y como ibamos a hacer cada parte a demas de un paso a paso en 6 fases que teniamos que completar.
+   qué queda fuera. Hice de antemano un plan detallado de lo que iba a necesitar, así que terminé
+   de definir los detalles y después tenía que ejecutar todo el plan y verificar que lo planeado
+   estuviera bien hecho.
+2. **Decisiones ya tomadas**: para que el agente no cambiara lo planeado, le puse como regla no
+   cambiar las tecnologías: Python 3.12, FastAPI, SQLAlchemy 2.0 + Alembic, uv, tests contra
+   Postgres real con el LLM mockeado, Groq detrás de un protocolo `LLMClient`. Le definí
+   exactamente qué esperaba, qué era el proyecto y cómo íbamos a hacer cada parte, además de un
+   paso a paso en 6 fases que teníamos que completar.
 3. **Reglas de trabajo:**
 
    > 1. Trabaja POR FASES. Al terminar cada fase, DETENTE y dame: un resumen de lo que hiciste,
@@ -24,6 +29,14 @@ Antes de pedir código busque la informacion necesaria para cumplir la tarea con
    > 3. Ningún secreto en el código ni en los logs.
    > 4. Si algo de mis decisiones te parece incorrecto, dímelo con argumentos ANTES de implementarlo.
    > 5. Código simple y legible por encima de lo "inteligente". Comenta solo el porqué.
+
+   La gran mayoría de esto es lo que pide textualmente la actividad, así que me estaba asegurando
+   de que lo hiciera tal como se pide.
+
+   En Obsidian fui tomando notas del proceso. Básicamente usé Gemini Pro (high effort) y Claude
+   Opus 5.5 (high) para investigar las tecnologías, definir las decisiones y armar el prompt
+   inicial. Edité todo lo que quería, combiné lo que me dijeron en un primer prompt guardado en un
+   .txt y luego solo le dije que empezáramos la fase 0.
 
 Las fases fueron: 0) plan y preguntas, sin código; 1) esqueleto y Docker; 2) modelo y migración;
 3) endpoints; 4) cliente LLM y worker (en una rama aparte); 5) tests y CI; 6) modo
@@ -34,16 +47,17 @@ que me permitió entender cada línea, que es lo que voy a necesitar en la entre
 
 - En la fase 0 el agente hizo preguntas (cliente de Groq, qué hacer cuando se agotan los
   reintentos, plataforma de deploy, validación del dominio) y propuso cambios a mi diseño. Acepté
-  agregar un estado `procesando`, un tope de intentos y un guardado condicional por `intentos`.
-- Después de la fase 2 pedí: *"el worker debería ser un proceso separado, usa AsyncEngine y
-  AsyncSession para que el worker no bloquee todo, las marcas de tiempo en UTC y String(255) en
-  nombre_empresa, dominio, cargo_contacto y error_motivo"*. El agente me advirtió que el modo
-  async de psycopg no funciona en Windows y elegimos asyncpg.
-- *"Asegúrate de que error_motivo no pueda bloquear el lead por una excepción larga"*: con 255
+  ya que eran mejoras de la idea inicial.
+- En la fase 0 habíamos acordado SQLAlchemy síncrono con psycopg. Después de la fase 2 cambié de
+  idea y le pedí que usara AsyncEngine y AsyncSession para que el worker no bloquee todo, las marcas
+  de tiempo en UTC y String(255) en nombre_empresa, dominio, cargo_contacto y error_motivo. Antes de
+  implementarlo, el agente me avisó que el modo async de psycopg no funciona en Windows, y elegí
+  asyncpg.
+- Me tuve que asegurar que no hubiera bugs con el maximo de caracteres en los errores, por si acaso pasa algo con 255
   caracteres, un mensaje largo habría hecho fallar el `UPDATE` y el lead habría quedado en
   `procesando`. Se resolvió en el tipo de la columna, para que aplique a cualquier escritura.
-- *"Realiza todas las verificaciones necesarias para que los correos no salgan nunca con ese
-  tipo de errores, y muéstrame cómo se ven los correos"*: ver la sección 2.
+- le indique instrucciones mas claras de que teniamos que tener con certeza que ningun correo podria salir con un tag.
+  Ya habia revisiones para evitarlo pero arreglamos un poco mas el prompt.
 
 ### El prompt inicial completo
 
@@ -128,51 +142,74 @@ Después tendré una entrevista técnica SIN IA, así que tengo que entender cad
 
 ### Correos con `[Tu Empresa]` en producción (el más importante)
 
-**Qué pasó.** Al probar la URL de Render, uno de los dos leads quedó en `error`:
+Al probar la URL de Render, uno de los dos leads quedó en `error`:
 
 ```
 error_motivo = 'Respuesta inválida del LLM: JSON inválido del LLM (cuerpo: Value error,
                 contiene un marcador sin reemplazar: [Tu Empresa])'
 ```
 
-La validación hizo su trabajo (no se guardó un correo roto), pero ese lead se perdió.
+La validación hizo su trabajo, pero ese lead se perdió.
 
-**La primera propuesta del agente no sirvió.** Propuso agregar al prompt una regla para que no
-firmara. Antes de aceptarla le pedí medirla: 12 llamadas reales con el prompt de ese momento y 12
-con el corregido. Resultado: 1 de 12 inválidos con el prompt original y **2 de 12 con el
-"corregido"**. No se aplicó.
+La primera propuesta del agente no sirvió. Propuso agregar al prompt una regla para que no
+firmara. La medimos con 12 llamadas reales con el prompt de ese momento y 12 con el corregido.
+El resultado fue 1 de 12 inválidos con el prompt original y 2 de 12 con la supuesta corrección.
+No se aplicó.
 
-**Cómo encontré la causa.** Pedí ver los correos completos, no solo el resultado de la
-validación. Al leer 8 correos reales se vio el problema de fondo: el modelo no sabía quién
-escribía ni qué se vendía. Inventaba un producto distinto en cada correo (logística para Mercado
-Libre, "mi agencia" para Despegar, RRHH para Bimbo) y, al querer nombrar su empresa o firmar,
-ponía `[Tu Empresa]` o `[Nombre]`. Además encontré cosas que la validación de ese momento dejaba
-pasar: correos que terminaban en "Un saludo," sin firma, mezcla de "tú", "ustedes" y "vuestra", y
-prueba social inventada ("otras instituciones del sector").
+Para encontrar la causa pedí ver los correos completos, no solo el resultado de la
+validación. Al leer 8 correos reales se vio el problema: el modelo no sabía quién
+escribía ni qué se vendía. Inventaba un producto distinto en cada correo y, al querer 
+nombrar su empresa o firmar, ponía `[Tu Empresa]` o `[Nombre]`. Además encontré cosas 
+que la validación de ese momento dejaba pasar: correos que terminaban en "Un saludo," 
+sin firma, mezcla de "tú", "ustedes" y "vuestra", y prueba social inventada ("otras instituciones del sector").
 
-**Qué decidí.** El agente propuso variables `REMITENTE_*` en el prompt. Lo ajusté a un híbrido:
-el modelo escribe la empresa y la propuesta en el cuerpo (para que el correo diga qué se vende),
-pero **la firma la agrega el código**, porque lo que puede ser determinista no se le deja al LLM.
+para corregirlo el agente propuso variables REMITENTE_* en el prompt. pero lo cambiamos a una version hibrida
+ entre las soluciones que me habia dejado: el modelo escribe la empresa y la propuesta en el cuerpo (para que el correo diga qué se vende),
+pero la firma la agrega el código, basicamente, si la firma es algo que siempre va, para que dejarselo a la LLM, se cambia en 2 lineas 
+se me ocurrio la idea de llamarlo con una base de datos de remitentes para que cualquier persona de la empresa lo pueda usar pero eso es
+una idea aparte
+
 Además:
 
 - Validaciones nuevas: despedida al final, marcadores sin corchetes (`Tu Empresa`, `<Nombre>`,
   `XXX`), asunto de más de 120 caracteres, y que el correo mencione al lead y a la empresa
   remitente.
 - Si la respuesta es inválida, se pide otro correo, hasta 3 generaciones, antes de pasar a
-  `error`.
+  `error`. Esto es muy importante para no perder leads por una mala generación: los inválidos
+  aparecían en más o menos 1 de cada 12 generaciones, así que pedir otro correo casi siempre
+  resuelve el problema.
 
 **Resultado** con 12 leads reales por el pipeline completo: 12 procesados, 0 descartados, todos
 con la firma correcta. Que nunca salga un correo roto no depende de esa muestra, que es chica:
 está garantizado por la validación y cubierto por tests.
+Así se ve un correo real, generado por el pipeline completo con el remitente actual
+(Amelia Honorato, de The Growth Pro):
+
+```
+1. Mercado Libre · Gerente de Logística · procesado
+ASUNTO: Optimizar logística con datos unificados
+
+Hola, en Mercado Libre la eficiencia logística depende de la velocidad para tomar decisiones.
+The Growth Pro conecta tus datos de ventas, marketing y operaciones en tableros automáticos,
+eliminando la dependencia de TI y permitiendo a tu equipo de logística reaccionar en tiempo real.
+¿Tienes 15 minutos esta semana para ver cómo funciona?
+
+Saludos,
+Amelia Honorato
+The Growth Pro
+```
+
+Las pruebas de la sección 3 se hicieron antes de cambiar el remitente, por eso esos correos
+están firmados por "Laura Méndez, Nexo Analytics", el valor de ejemplo anterior.
 
 ### El modelo por defecto no existía
 
-El agente configuró `llama-3.3-70b-versatile` como modelo por defecto sin verificarlo. En la
-primera prueba real el lead quedó en `error` con
-`Groq respondió 404: The model 'llama-3.3-70b-versatile' does not exist`. Lo bueno: el manejo de
-errores funcionó (error permanente, sin reintentos, motivo legible). Listamos los modelos
-disponibles con la API de Groq, probamos los candidatos con nuestro cliente (los `gpt-oss`
-fallaron con el modo JSON) y elegí `qwen/qwen3.8-27b`.
+Cuando hice las primeras investigaciones ambos modelos me indicaron que llama era una buena opcion
+asi,se configuró `llama-3.3-70b-versatile` como modelo por defecto sin verificarlo. En la
+primera prueba real el lead quedó en error porque `Groq respondió 404: The model 'llama-3.3-70b-versatile' does not exist`.
+Lo bueno: el manejo de errores funcionó (error permanente, sin reintentos, motivo legible). Listamos los modelos
+disponibles con la API de Groq, probamos los candidatos con nuestro cliente (los `gpt-oss` fallaron con el modo JSON) y elegí `qwen/qwen3.8-27b`.
+fue un poco prueba y error, pero el resultado quedo bien y funciona correctamente que es lo que importa.
 
 ### La CI dio verde construyendo una imagen rota
 
@@ -188,7 +225,7 @@ con el lock viejo el build ahora falla.
   con `CMD ["sh", "-c", ...]`, el PID 1 era `sh` y no reenviaba el SIGTERM a uvicorn. Se agregó
   `exec`; ahora tarda 1 s y el log muestra "Worker detenido".
 - **El README era demasiado largo.** El primero tenía tablas de variables, de fallas y de API.
-  Lo pedí corto, solo con lo necesario: cómo levantarlo, decisiones y mejoras.
+  lo arregle a mano pero primero le indique que lo hiciera mas corto: cómo levantarlo, decisiones y mejoras.
 
 ## 3. Cómo comprobé que funciona
 
@@ -214,7 +251,7 @@ siempre es falso: un `FakeLLM` o el cliente real de Groq contra un servidor simu
 - Validación de correos con casos sacados de respuestas reales de Groq.
 - Modo embebido: la API responde en menos de 0,3 s mientras el LLM tarda 0,5 s.
 
-**¿Los tests detectan errores de verdad?** Rompí el código a propósito y los corrí:
+para saber si los tests funcionan rompimos el código a propósito y los corrí:
 
 | Cambio introducido | Resultado |
 |---|---|
@@ -245,7 +282,7 @@ Script de verificación con `httpx` sobre https://tgp-leads.onrender.com:
 
 Esa falla es la que se describe en la sección 2.
 
-**Después de desplegar el fix (PR #3)**, la misma prueba contra la URL pública:
+Después de desplegar el fix (PR #3), la misma prueba contra la URL pública:
 
 ```
 [OK] POST Mercado Libre -> 202 pendiente dominio='mercadolibre.com'
@@ -258,7 +295,8 @@ TODO OK
 ```
 
 Para comprobar que Render corría la versión nueva y no la anterior, revisé la firma, que solo
-agrega el código nuevo: los dos correos terminan en `"\n\nSaludos,\nLaura Méndez\nNexo Analytics"`.
+agrega el código nuevo: los dos correos terminan en `"\n\nSaludos,\nLaura Méndez\nNexo Analytics"`
+y cuando funcionaba lo cambie por nombres de TGP.
 
 Después mandé 8 leads más de una vez (Despegar, Globant, Clínica Alemana,
 Grupo Bimbo S.A. de C.V., Falabella, Nubank, Cemex, Kavak):
