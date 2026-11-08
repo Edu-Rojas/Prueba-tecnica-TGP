@@ -23,5 +23,7 @@ USER appuser
 
 EXPOSE 8000
 
+# La api aplica las migraciones antes de arrancar (el worker sobreescribe este comando y no migra,
+# así nunca hay dos procesos migrando a la vez).
 # Forma "sh -c" para poder expandir ${PORT}: Render inyecta el puerto en esa variable.
-CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
+CMD ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
