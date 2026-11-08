@@ -36,8 +36,10 @@ from app.llm.base import (
     LLMErrorPermanente,
     LLMErrorTransitorio,
     LLMRespuestaInvalida,
+    validar_contenido,
 )
 from app.llm.groq_client import GroqClient
+from app.llm.prompt import agregar_firma
 from app.logs import configurar_logging
 from app.models import EstadoLead, Lead, truncar, utc_now
 
@@ -143,6 +145,28 @@ async def generar_con_reintentos(
     return await reintentar(llm.generar_correo, datos)
 
 
+async def generar_correo_valido(
+    llm: LLMClient, datos: DatosLead, settings: Settings
+) -> CorreoGenerado:
+    """Pide el correo y lo valida contra el lead; si es inválido, pide otro (regenera).
+
+    Dos niveles distintos: generar_con_reintentos repite la MISMA petición ante fallas de red;
+    este bucle pide un correo NUEVO cuando el anterior no pasó la validación.
+    Un correo inválido nunca se devuelve: o sale uno válido o se lanza LLMRespuestaInvalida.
+    """
+    total = settings.llm_regeneraciones + 1
+    for generacion in range(1, total + 1):
+        try:
+            correo = await generar_con_reintentos(llm, datos, settings)
+            validar_contenido(correo, datos, settings.remitente_empresa)
+            return correo
+        except LLMRespuestaInvalida as exc:
+            if generacion == total:
+                raise LLMRespuestaInvalida(f"{exc} (tras {total} generaciones)") from exc
+            logger.warning("Correo inválido (%s); generando otro (%d/%d)", exc, generacion, total)
+    raise AssertionError("inalcanzable")
+
+
 async def guardar_resultado(sesiones: Sesiones, reclamado: LeadReclamado, **valores) -> bool:
     """Paso 3: guarda el resultado solo si el lead sigue "procesando" con nuestro mismo intento.
 
@@ -173,7 +197,7 @@ async def procesar_uno(sesiones: Sesiones, llm: LLMClient, settings: Settings) -
         return False
 
     try:
-        correo = await generar_con_reintentos(llm, reclamado.datos, settings)
+        correo = await generar_correo_valido(llm, reclamado.datos, settings)
     except LLMErrorTransitorio as exc:
         motivo = f"LLM no disponible tras {settings.llm_max_retries} reintentos: {exc}"
     except LLMRespuestaInvalida as exc:
@@ -191,7 +215,7 @@ async def procesar_uno(sesiones: Sesiones, llm: LLMClient, settings: Settings) -
             reclamado,
             estado=EstadoLead.PROCESADO,
             correo_asunto=correo.asunto,
-            correo_cuerpo=correo.cuerpo,
+            correo_cuerpo=agregar_firma(correo.cuerpo, settings),
             error_motivo=None,
         )
         logger.info("Lead %s procesado", reclamado.id)

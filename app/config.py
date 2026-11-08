@@ -21,6 +21,17 @@ class Settings(BaseSettings):
     llm_max_retries: int = 3
     # Espera base del backoff exponencial (1s, 2s, 4s...). En tests se pone en 0.
     llm_backoff_seconds: float = 1.0
+    # Veces que se pide otro correo si el LLM devuelve uno inválido (2 = hasta 3 generaciones).
+    llm_regeneraciones: int = 2
+
+    # Quién envía los correos. Empresa y propuesta van al prompt; la firma la arma el código.
+    # Son valores de ejemplo: cambiarlos por los reales en .env o en Render.
+    remitente_nombre: str = "Laura Méndez"
+    remitente_empresa: str = "Nexo Analytics"
+    remitente_propuesta: str = (
+        "una plataforma que conecta los datos de ventas, marketing y operaciones en tableros "
+        "automáticos, para tomar decisiones con datos sin depender del equipo de TI"
+    )
 
     worker_poll_interval_seconds: float = 2.0
     # Debe ser mayor que lo que puede tardar un lead (timeout x llamadas + esperas),

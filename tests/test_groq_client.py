@@ -18,6 +18,7 @@ from app.worker import procesar_uno
 pytestmark = pytest.mark.anyio
 
 DATOS = DatosLead("Acme", "acme.com", "CTO")
+CUERPO_VALIDO = "Hola, en Nexo Analytics ayudamos a Acme con sus datos. ¿Hablamos?"
 
 
 def respuesta_groq(contenido: str, status: int = 200) -> httpx.Response:
@@ -154,7 +155,8 @@ async def test_worker_con_json_invalido_deja_el_lead_en_error(sesiones, settings
 
     assert lead.estado == EstadoLead.ERROR
     assert lead.error_motivo.startswith("Respuesta inválida del LLM: JSON inválido")
-    assert llamadas == 1
+    assert lead.error_motivo.endswith("(tras 3 generaciones)")
+    assert llamadas == settings.llm_regeneraciones + 1
 
 
 async def test_worker_con_timeout_reintenta_y_deja_el_lead_en_error(sesiones, settings):
@@ -174,7 +176,7 @@ async def test_worker_se_recupera_de_un_429(sesiones, settings):
     respuestas = iter(
         [
             httpx.Response(429, json={"error": {"message": "rate limit"}}),
-            respuesta_groq(json.dumps({"asunto": "Hola", "cuerpo": "Correo breve."})),
+            respuesta_groq(json.dumps({"asunto": "Hola", "cuerpo": CUERPO_VALIDO})),
         ]
     )
 

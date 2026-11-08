@@ -12,7 +12,7 @@ from app.llm.base import (
     LLMErrorTransitorio,
     LLMRespuestaInvalida,
 )
-from app.llm.prompt import SYSTEM_PROMPT, construir_mensaje_usuario
+from app.llm.prompt import construir_mensaje_usuario, construir_prompt_sistema
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +29,7 @@ class GroqClient:
     ) -> None:
         self._model = settings.groq_model
         self._timeout = settings.llm_timeout_seconds
+        self._prompt_sistema = construir_prompt_sistema(settings)
         # La API key solo vive en este header; nunca se loguea ni se incluye en mensajes de error.
         self._http = httpx.AsyncClient(
             base_url=settings.groq_base_url,
@@ -47,7 +48,7 @@ class GroqClient:
         payload = {
             "model": self._model,
             "messages": [
-                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "system", "content": self._prompt_sistema},
                 {"role": "user", "content": construir_mensaje_usuario(lead)},
             ],
             # Modo JSON de Groq: obliga al modelo a devolver un objeto JSON válido.

@@ -5,6 +5,7 @@ import pytest
 from sqlalchemy import select, update
 
 from app.llm.base import (
+    CorreoGenerado,
     LLMErrorPermanente,
     LLMErrorTransitorio,
     LLMRespuestaInvalida,
@@ -39,7 +40,10 @@ async def test_pendiente_pasa_a_procesado_con_el_correo(sesiones, settings):
     guardado = await leer(sesiones, lead.id)
     assert guardado.estado == EstadoLead.PROCESADO
     assert guardado.correo_asunto == CORREO_OK.asunto
-    assert guardado.correo_cuerpo == CORREO_OK.cuerpo
+    # El cuerpo es el del LLM más la firma, que agrega el código (no el LLM).
+    assert guardado.correo_cuerpo == (
+        f"{CORREO_OK.cuerpo}\n\nSaludos,\nLaura Méndez\nNexo Analytics"
+    )
     assert guardado.error_motivo is None
     assert guardado.intentos == 1
     assert guardado.updated_at > guardado.created_at
@@ -67,16 +71,61 @@ async def test_error_permanente_pasa_a_error_sin_reintentar(sesiones, settings):
     assert len(llm.llamadas) == 1
 
 
-async def test_respuesta_invalida_pasa_a_error_sin_reintentar(sesiones, settings):
+async def test_respuesta_invalida_se_regenera_y_luego_procesa(sesiones, settings):
     lead = await crear_lead(sesiones)
-    llm = FakeLLM(LLMRespuestaInvalida("JSON inválido del LLM (asunto: Field required)"))
+    llm = FakeLLM(LLMRespuestaInvalida("contiene un marcador sin reemplazar: [Nombre]"), CORREO_OK)
+
+    await procesar_uno(sesiones, llm, settings)
+
+    guardado = await leer(sesiones, lead.id)
+    assert guardado.estado == EstadoLead.PROCESADO
+    assert len(llm.llamadas) == 2
+
+
+async def test_respuesta_invalida_persistente_pasa_a_error_tras_3_generaciones(sesiones, settings):
+    lead = await crear_lead(sesiones)
+    llm = FakeLLM(LLMRespuestaInvalida("contiene un marcador sin reemplazar: [Nombre]"))
 
     await procesar_uno(sesiones, llm, settings)
 
     guardado = await leer(sesiones, lead.id)
     assert guardado.estado == EstadoLead.ERROR
-    assert guardado.error_motivo.startswith("Respuesta inválida del LLM")
-    assert len(llm.llamadas) == 1
+    assert guardado.correo_cuerpo is None
+    assert guardado.error_motivo == (
+        "Respuesta inválida del LLM: contiene un marcador sin reemplazar: [Nombre] "
+        "(tras 3 generaciones)"
+    )
+    assert len(llm.llamadas) == settings.llm_regeneraciones + 1
+
+
+@pytest.mark.parametrize(
+    ("correo", "motivo"),
+    [
+        # No nombra al lead: no es un correo personalizado para esta empresa.
+        (
+            CorreoGenerado(asunto="Hola", cuerpo="En Nexo Analytics ayudamos. ¿Hablamos?"),
+            "el correo no menciona a Acme",
+        ),
+        # No nombra a quien escribe: el modelo inventó otra empresa o ninguna.
+        (
+            CorreoGenerado(asunto="Para Acme", cuerpo="En Datos SA ayudamos a Acme. ¿Hablamos?"),
+            "el cuerpo no menciona a Nexo Analytics (quien escribe)",
+        ),
+    ],
+)
+async def test_correo_que_no_menciona_al_lead_o_al_remitente_no_se_guarda(
+    sesiones, settings, correo, motivo
+):
+    lead = await crear_lead(sesiones)
+    llm = FakeLLM(correo)
+
+    await procesar_uno(sesiones, llm, settings)
+
+    guardado = await leer(sesiones, lead.id)
+    assert guardado.estado == EstadoLead.ERROR
+    assert guardado.correo_cuerpo is None
+    assert motivo in guardado.error_motivo
+    assert len(llm.llamadas) == 3
 
 
 async def test_error_transitorio_se_reintenta_y_luego_procesa(sesiones, settings):
