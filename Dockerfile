@@ -13,7 +13,9 @@ WORKDIR /app
 # Primero solo los archivos de dependencias: si el código cambia pero el lock no,
 # Docker reutiliza esta capa y no reinstala todo.
 COPY pyproject.toml uv.lock .python-version ./
-RUN uv sync --frozen --no-dev
+# --locked (y no --frozen): si uv.lock no coincide con pyproject.toml el build falla,
+# en vez de construir una imagen a la que le faltan dependencias.
+RUN uv sync --locked --no-dev
 
 COPY . .
 
