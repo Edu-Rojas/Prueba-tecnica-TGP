@@ -14,12 +14,17 @@ class Settings(BaseSettings):
     # SecretStr evita que la key aparezca si alguien imprime o loguea la config.
     # Vacía por defecto: la API no la necesita, solo el worker la valida al arrancar.
     groq_api_key: SecretStr = SecretStr("")
-    groq_model: str = "llama-3.3-70b-versatile"
+    groq_model: str = "qwen/qwen3.8-27b"
     groq_base_url: str = "https://api.groq.com/openai/v1"
     llm_timeout_seconds: float = 20.0
+    # Reintentos SOLO para errores transitorios; con 3 hay hasta 4 llamadas en total.
     llm_max_retries: int = 3
+    # Espera base del backoff exponencial (1s, 2s, 4s...). En tests se pone en 0.
+    llm_backoff_seconds: float = 1.0
 
     worker_poll_interval_seconds: float = 2.0
+    # Debe ser mayor que lo que puede tardar un lead (timeout x llamadas + esperas),
+    # o se "recuperaría" un lead que todavía se está procesando.
     worker_stale_minutes: int = 5
     max_intentos: int = 3
     run_worker_in_api: bool = False

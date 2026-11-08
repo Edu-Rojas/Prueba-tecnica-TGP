@@ -7,8 +7,10 @@ dependencies = [
     "alembic>=1.20.1",
     "asyncpg>=0.32.0",
     "fastapi>=0.162.2",
+    "httpx>=0.28.1",
     "pydantic-settings>=2.16.2",
     "sqlalchemy[asyncio]>=2.1.8",
+    "tenacity>=9.2.1",
     "uvicorn[standard]>=0.54.0",
 ]
 
@@ -25,3 +27,7 @@ target-version = "py312"
 [tool.ruff.lint]
 # E/F: errores básicos, I: orden de imports, B: bugs comunes, UP: sintaxis moderna
 select = ["E", "F", "I", "B", "UP"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"

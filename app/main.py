@@ -1,16 +1,11 @@
-import logging
-
 from fastapi import FastAPI
 
 from app.config import get_settings
+from app.logs import configurar_logging
 from app.routes.leads import router as leads_router
 
 settings = get_settings()
-
-logging.basicConfig(
-    level=settings.log_level,
-    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
-)
+configurar_logging(settings.log_level)
 
 app = FastAPI(title="TGP Leads", version="0.1.0")
 app.include_router(leads_router)
