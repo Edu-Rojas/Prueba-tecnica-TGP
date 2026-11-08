@@ -13,6 +13,13 @@ class FakeLLM:
         self._respuestas = list(respuestas)
         self.llamadas: list[DatosLead] = []
 
+    # Se usa como "async with", igual que GroqClient (lo necesita el lifespan de la API).
+    async def __aenter__(self) -> "FakeLLM":
+        return self
+
+    async def __aexit__(self, *exc_info: object) -> None:
+        pass
+
     async def generar_correo(self, lead: DatosLead) -> CorreoGenerado:
         self.llamadas.append(lead)
         indice = min(len(self.llamadas), len(self._respuestas)) - 1

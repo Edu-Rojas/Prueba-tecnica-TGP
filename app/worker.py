@@ -227,11 +227,16 @@ async def run_forever(
     logger.info("Worker detenido")
 
 
+def validar_config(settings: Settings) -> None:
+    """Falla al arrancar (y no lead por lead) si falta configuración imprescindible."""
+    if not settings.groq_api_key.get_secret_value():
+        raise SystemExit("Falta GROQ_API_KEY: el worker no puede generar correos sin ella.")
+
+
 async def main() -> None:
     settings = get_settings()
     configurar_logging(settings.log_level)
-    if not settings.groq_api_key.get_secret_value():
-        raise SystemExit("Falta GROQ_API_KEY: el worker no puede generar correos sin ella.")
+    validar_config(settings)
 
     # Apagado limpio con `docker compose stop` (SIGTERM) o Ctrl+C: termina el lead en curso.
     detener = asyncio.Event()
