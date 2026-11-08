@@ -26,8 +26,8 @@ class Settings(BaseSettings):
 
     # Quién envía los correos. Empresa y propuesta van al prompt; la firma la arma el código.
     # Son valores de ejemplo: cambiarlos por los reales en .env o en Render.
-    remitente_nombre: str = "Laura Méndez"
-    remitente_empresa: str = "Nexo Analytics"
+    remitente_nombre: str = "Amelia Honorato"
+    remitente_empresa: str = "The Growth Pro"
     remitente_propuesta: str = (
         "una plataforma que conecta los datos de ventas, marketing y operaciones en tableros "
         "automáticos, para tomar decisiones con datos sin depender del equipo de TI"
